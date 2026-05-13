@@ -29,18 +29,20 @@ public class SpikeTrap : MonoBehaviour
     }
 
     // 1. 배경처럼 용사 속도에 맞춰 움직이는(혹은 멈추는) 함수
-    void MoveLikeBackground()
+    // SpikeTrap.cs의 MoveLikeBackground 수정
+void MoveLikeBackground()
+{
+    if (heroLogic != null)
     {
-        if (heroLogic != null)
-        {
-            // 용사가 뛰면 3배, 멈추면 0.1배, 공격 중엔 0배가 됩니다.
-            float speedMultiplier = heroLogic.GetSpeedMultiplier();
-            float currentSpeed = baseSpeed * speedMultiplier;
+        float speedMultiplier = heroLogic.GetSpeedMultiplier();
+        
+        // ⭐️ 용사가 멈춰있거나 공격 중(0)이어도, 최소 1배속으로는 다가오게 만듭니다.
+        float finalMultiplier = Mathf.Max(1f, speedMultiplier); 
+        float currentSpeed = baseSpeed * finalMultiplier;
 
-            // Space.World 기준으로 왼쪽으로 이동
-            transform.Translate(Vector3.left * currentSpeed * Time.deltaTime, Space.World);
-        }
+        transform.Translate(Vector3.left * currentSpeed * Time.deltaTime, Space.World);
     }
+}
 
     // 2. 용사가 가까이 왔는지 거리를 재고 애니메이션을 트는 함수
     void CheckProximity()
