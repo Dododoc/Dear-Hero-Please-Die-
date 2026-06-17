@@ -13,6 +13,8 @@ public class HeroAI : MonoBehaviour
     private float nextStateTime; 
     private bool isRestingAfterRun = false; 
     public bool isJumping = false; // ⭐️ 지금 공중에 있는지 확인하는 변수
+    public bool isHurting = false; 
+    private Coroutine hurtCoroutine;
     [Header("Raycast 설정")]
     public Transform rayStart; 
     public float attackRayDistance = 2.5f; 
@@ -107,7 +109,7 @@ public void ForceStopForEnding()
             if (currentMana > maxMana) currentMana = maxMana; // 최대치를 넘지 않게 고정
         }
         // ⭐️ 죽었거나, 공격 중이면 다른 행동을 못하게 막음
-        if (isDead || isAttacking) return;
+        if (isDead || isAttacking|| isJumping) return;
 
         stateTimer += Time.deltaTime;
         if (generalCooldown > 0) generalCooldown -= Time.deltaTime;
@@ -163,30 +165,26 @@ public void ForceStopForEnding()
     }
 
     void DetectTraps()
-{
-    if (isPetrified) return;
+    {
+        if (isPetrified) return;
 
-    RaycastHit2D hitAttack = Physics2D.Raycast(rayStart.position, Vector2.right, attackRayDistance, trapLayer);
-    RaycastHit2D hitDefend = Physics2D.Raycast(rayStart.position, Vector2.right, defendRayDistance, trapLayer);
-    
-    Vector3 footPos = rayStart.position + Vector3.down * 1.3f; 
-    
-    // ⭐️ 수정: attackRayDistance 대신 jumpRayDistance를 사용합니다.
-    RaycastHit2D hitFoot = Physics2D.Raycast(footPos, Vector2.right, jumpRayDistance, trapLayer);
-    
-    Debug.DrawRay(rayStart.position, Vector2.right * attackRayDistance, Color.blue);
-    Debug.DrawRay(rayStart.position + Vector3.down * 0.1f, Vector2.right * defendRayDistance, Color.red);
-    
-    // ⭐️ 수정: 디버그용 선 길이도 똑같이 jumpRayDistance로 맞춥니다.
-    Debug.DrawRay(footPos, Vector2.right * jumpRayDistance, Color.green);
-        // 걷거나 뛸 때
+        RaycastHit2D hitAttack = Physics2D.Raycast(rayStart.position, Vector2.right, attackRayDistance, trapLayer);
+        RaycastHit2D hitDefend = Physics2D.Raycast(rayStart.position, Vector2.right, defendRayDistance, trapLayer);
+        Vector3 footPos = rayStart.position + Vector3.down * 1.3f; 
+        RaycastHit2D hitFoot = Physics2D.Raycast(footPos, Vector2.right, jumpRayDistance, trapLayer);
+        
+        // 걷거나 뛸 때 (Walk || Run)
         if (currentState == HeroState.Walk || currentState == HeroState.Run)
         {
             // 상단 레이저: 공격 함정 감지
             if (hitAttack.collider != null)
             {
                 string trapTag = hitAttack.collider.tag;
-                if (trapTag == "Trap_Attack" && !isAttacking && currentState == HeroState.Walk) 
+                string trapLayerName = LayerMask.LayerToName(hitAttack.collider.gameObject.layer);
+
+                // ⭐️ 수정: !isAttacking 옆에 && currentState == HeroState.Walk 조건을 추가!
+                // 이제 뛸 때(Run)는 함정을 봐도 무시하고 그냥 달려갑니다.
+                if ((trapTag == "Trap_Attack" || trapLayerName == "Trap_Attack") && !isAttacking && currentState == HeroState.Walk) 
                 {
                     StartCoroutine(Execute3HitCombo()); 
                 }
@@ -231,63 +229,97 @@ public void ForceStopForEnding()
             }
         }
     }
-
+    
     IEnumerator Execute3HitCombo()
     {
         isAttacking = true; 
 
         anim.SetTrigger("doAttack1");
         yield return new WaitForSeconds(attackInterval); 
-        if (!isAttacking) yield break; // ⭐️ 추가: 맞아서 취소됐으면 2타 안 나가고 중단!
+        if (!isAttacking) yield break; 
 
         anim.SetTrigger("doAttack2");
         yield return new WaitForSeconds(attackInterval); 
-        if (!isAttacking) yield break; // ⭐️ 추가: 맞아서 취소됐으면 3타 안 나가고 중단!
+        if (!isAttacking) yield break; 
 
         anim.SetTrigger("doAttack3");
         yield return new WaitForSeconds(afterComboDelay); 
 
-        isAttacking = false; 
-        yield return new WaitForSeconds(attackInterval);
-    
-    // 코루틴 맨 마지막에 추가
-    isAttacking = true; // 엔딩이므로 다시는 Walk로 돌아가지 못하게 계속 잠금
-    anim.SetInteger("State", 0); // Idle 상태 번호
+        isAttacking = false; // ⭐️ 이제 정상적으로 공격 상태가 해제됩니다!
     }
 
+    // ⭐️ 3. 거리와 배경 이동 속도를 결정하는 함수 수정
     public float GetSpeedMultiplier()
     {
-        if (isDead) return 0f;       // ⭐️ 죽으면 배경 멈춤!
-        if (isAttacking) return 0f; 
+        if (isDead) return 0f;       
+        if (isPetrified) return 0f; // 석화 중일 때 완전 정지!
+        if (isHurting) return 0f;   // ⭐️ 추가: 아파하는(Hurt) 중일 때 완전 정지!
         
         if (currentState == HeroState.Walk) return 1f;
-        if (currentState == HeroState.Stop) return 0.1f; 
+        if (currentState == HeroState.Stop) return 0f; // ⭐️ 수정: 쉬거나 막을 때 기존 0.1f에서 0f로 변경하여 완벽 정지!
         if (currentState == HeroState.Run) return 3f; 
+        
         return 1f;
     }
+    // ⭐️ 극적인 타격감을 위한 시네마틱 슬로우 모션!
+    public void TriggerSlowMotion()
+    {
+        // 0.2배속(엄청 느려짐)으로 현실 시간 0.3초 동안 유지합니다.
+        StartCoroutine(SlowMotionRoutine(0.2f, 0.3f)); 
+    }
 
-    // ⭐️ 데미지 처리 함수 (숫자를 받아서 체력을 깎습니다)
+    private IEnumerator SlowMotionRoutine(float targetTimeScale, float durationRealTime)
+    {
+        Time.timeScale = targetTimeScale; // ⭐️ 게임 속도를 확 늦춤!
+        
+        // Time.deltaTime이 느려졌으므로, 반드시 현실 시간(Realtime) 기준으로 기다려야 합니다.
+        yield return new WaitForSecondsRealtime(durationRealTime); 
+        
+        Time.timeScale = 1f; // ⭐️ 다시 원래 속도로 쾌속 복구!
+    }
+
+    // ⭐️ 1. 데미지 처리 함수 수정
     public void TakeDamage(int damage)
     {
-        if (isDead) return; // 이미 죽었으면 무시
+        if (isDead) return;
 
-        currentHP -= damage; // 체력 감소
+        currentHP -= damage; 
         Debug.Log("용사가 데미지를 입었습니다! 남은 체력: " + currentHP);
 
         isAttacking = false;
 
-        // 체력이 0 이하가 되면 사망!
         if (currentHP <= 0)
         {
             isDead = true;
-            anim.SetTrigger("doDie"); // 사망 애니메이션 실행
+            anim.SetTrigger("doDie"); 
             Debug.Log("용사 사망!");
         }
-        else // 아직 살아있으면 아파하기만 함
+        else 
         {
-            anim.SetTrigger("doHurt");
-            SetState(HeroState.Walk); 
+            // ⭐️ 수정: 달리기(Run) 상태일 때는 아파하는 모션과 멈춤 없이 그냥 맞으면서 달립니다!
+            if (currentState == HeroState.Run)
+            {
+                // 아무런 상태 변화나 애니메이션 트리거를 주지 않습니다.
+            }
+            else
+            {
+                // 뛰는 중이 아닐 때만 아파합니다.
+                anim.SetTrigger("doHurt");
+                
+                // 연속으로 맞았을 때를 대비해 기존 피격 코루틴을 끄고 새로 시작합니다.
+                if (hurtCoroutine != null) StopCoroutine(hurtCoroutine);
+                hurtCoroutine = StartCoroutine(HurtPauseRoutine());
+            }
         }
+    }
+    // ⭐️ 2. 피격 애니메이션이 나오는 동안 거리를 멈추게 할 코루틴 추가
+    IEnumerator HurtPauseRoutine()
+    {
+        isHurting = true;
+        // Hurt 애니메이션이 재생되는 시간만큼 대기 (0.4초 정도가 적당합니다)
+        yield return new WaitForSeconds(0.4f); 
+        isHurting = false;
+        SetState(HeroState.Walk); // 아파하는 게 끝나면 다시 걷기 시작
     }
     // ⭐️ 출혈을 시작하는 함수
     public void StartBleeding(int tickDamage, int tickCount, float tickInterval)
@@ -367,4 +399,5 @@ public void ForceStopForEnding()
 
         isJumping = false; // 점프 끝! (이제 다시 맞거나 뛸 수 있음)
     }
+    
 }

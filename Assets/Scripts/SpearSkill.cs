@@ -39,14 +39,21 @@ public class SpearSkill : MonoBehaviour
             HeroAI hero = col.GetComponent<HeroAI>();
             if (hero != null)
             {
-                // ⭐️ 주의: 대공 창이니까 용사가 '점프 중'일 때만 데미지를 입고 사라져야 합니다!
+                // 공중에서 맞췄을 때!
                 if (hero.isJumping)
                 {
                     isHit = true; 
                     hero.TakeDamage(damage); 
+                    
+                    // ⭐️ 추가: 창이 몸에 꽂히는 순간 화면이 슬로우 모션으로 느려집니다!
+                    hero.TriggerSlowMotion(); 
+                    // ⭐️ 추가: 카메라를 0.2초 동안 0.3의 강도로 강하게 흔듭니다!
+                    if (CameraShake.instance != null)
+                    {
+                        CameraShake.instance.ShakeCamera(0.2f, 0.3f);
+                    }
                     Destroy(gameObject); 
                 }
-                // 점프 중이 아니라면(걸어가는 중이면) if문을 무시하고 용사를 그냥 통과합니다.
             }
         }
     }

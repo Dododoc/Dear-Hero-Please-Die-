@@ -19,7 +19,7 @@ public class SpikeTrap : MonoBehaviour
         anim = GetComponent<Animator>();
         
         // 씬 뷰에 용사가 있다면 자동으로 찾아서 연결해 주는 해커톤용 꿀팁 코드입니다!
-        heroLogic = FindObjectOfType<HeroAI>();
+        heroLogic = FindFirstObjectByType<HeroAI>();
     }
 
     void Update()
@@ -30,19 +30,20 @@ public class SpikeTrap : MonoBehaviour
 
     // 1. 배경처럼 용사 속도에 맞춰 움직이는(혹은 멈추는) 함수
     // SpikeTrap.cs의 MoveLikeBackground 수정
-void MoveLikeBackground()
-{
-    if (heroLogic != null)
+// SpikeTrap.cs 내부의 함수 교체
+    void MoveLikeBackground()
     {
-        float speedMultiplier = heroLogic.GetSpeedMultiplier();
-        
-        // ⭐️ 용사가 멈춰있거나 공격 중(0)이어도, 최소 1배속으로는 다가오게 만듭니다.
-        float finalMultiplier = Mathf.Max(1f, speedMultiplier); 
-        float currentSpeed = baseSpeed * finalMultiplier;
+        if (heroLogic != null)
+        {
+            float speedMultiplier = heroLogic.GetSpeedMultiplier();
+            
+            // ⭐️ 수정: Mathf.Max(1f, ...)를 삭제하고 바닥(배경) 속도와 무조건 똑같이 맞춥니다!
+            // 이렇게 해야 바닥이 멈추면 바닥에 깔린 함정도 완벽하게 같이 멈춥니다.
+            float currentSpeed = baseSpeed * speedMultiplier;
 
-        transform.Translate(Vector3.left * currentSpeed * Time.deltaTime, Space.World);
+            transform.Translate(Vector3.left * currentSpeed * Time.deltaTime, Space.World);
+        }
     }
-}
 
     // 2. 용사가 가까이 왔는지 거리를 재고 애니메이션을 트는 함수
     void CheckProximity()

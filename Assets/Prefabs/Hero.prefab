@@ -142,20 +142,21 @@ MonoBehaviour:
   isJumping: 0
   rayStart: {fileID: 1610360214335050346}
   attackRayDistance: 3.8
-  defendRayDistance: 0.8
+  defendRayDistance: 1.7
   trapLayer:
     serializedVersion: 2
     m_Bits: 8
+  jumpRayDistance: 0.9
   attackInterval: 0.4
   afterComboDelay: 1.2
   isAttacking: 0
-  jumpHeight: 2.5
-  jumpDuration: 0.8
+  jumpHeight: 2.7
+  jumpDuration: 1.8
   isPetrified: 0
   maxMana: 150
   currentMana: 150
-  manaRecoverSpeed: 10
-  maxHP: 150
+  manaRecoverSpeed: 5
+  maxHP: 250
   currentHP: 0
   isDead: 0
   spriteRenderer: {fileID: 8743154926335978319}
